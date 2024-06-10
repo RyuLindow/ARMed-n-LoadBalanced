@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "aspNamePublisher": {
+      "value": "asp-loadbalanced-publisher"
+    },
+    "aspNameSubscriber": {
+      "value": "asp-loadbalanced-subscriber"
+    },
+    "serverName": {
+      "value": "lbserv"
+    },
+    "serverUser": {
+      "value": "lindow"
+    },
+    "serverPass": {
+      "value": "g99xzmKoUd63T5vxDCgkN172SnlKO."
+    },
+    "dbName": {
+      "value": "lb-db"
+    },
+    "generalResourceTags": {
+      "value": {
+        "Type": "Loadbalanced"
+      }
+    },
+    "lbResourceTagsPublisher": {
+      "value": {
+        "Type": "Loadbalanced",
+        "Server": "Publisher"
+      }
+    }    ,
+    "lbResourceTagsSubscriber": {
+      "value": {
+        "Type": "Loadbalanced",
+        "Server": "Subscriber"
+      }
+    }
+  }
+}

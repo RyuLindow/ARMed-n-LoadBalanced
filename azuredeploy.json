@@ -1,0 +1,197 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "functions": [],
+    /*PAREMETERS*/
+    "parameters": {
+        "generalResourceTags": {
+            "type": "object"
+        },
+        "lbResourceTagsPublisher": {
+            "type": "object"
+        },
+        "lbResourceTagsSubscriber": {
+            "type": "object"
+        },
+        "aspNamePublisher": {
+            "type": "string"
+        },
+        "aspNameSubscriber": {
+            "type": "string"
+        },
+        "PublisherWebAppName": {
+            "type": "string",
+            "defaultValue": "[concat('Publisher', newGuid())]"
+        },
+        "SubscriberWebAppName": {
+            "type": "string",
+            "defaultValue": "[concat('Subscriber', newGuid())]"
+        },
+        "dotNetVersion": {
+            "type": "string",
+            "defaultValue": "v8.0"
+        },
+        "serverName": {
+            "type": "string"
+        },
+        "serverUser": {
+            "type": "string"
+        },
+        "serverPass": {
+            "type": "string"
+        },
+        "dbName": {
+            "type": "string"
+        },
+        "dbConnString": {
+            "type": "string",
+            "defaultValue": "[concat('Server=',parameters('serverName'),'.database.windows.net;','database=',parameters('dbName'),';','User ID=',parameters('serverUser'),';','Password=',parameters('serverPass'),';','Connection Timeout=300;')]"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            /*PUBLISHER ASP*/
+            "name": "[parameters('aspNamePublisher')]",
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2020-12-01",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "S1",
+                "tier": "Standard",
+                "size": "S1",
+                "capacity": 1
+            },
+            "tags": "[parameters('lbResourceTagsPublisher')]",
+            "properties": {
+                "name": "[parameters('aspNamePublisher')]"
+            }
+        },
+        {
+            /*SUBSCRIBER ASP*/
+            "name": "[parameters('aspNameSubscriber')]",
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2020-12-01",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "S1",
+                "tier": "Standard",
+                "size": "S1",
+                "capacity": 3
+            },
+            "tags": "[parameters('lbResourceTagsSubscriber')]",
+            "properties": {
+                "name": "[parameters('aspNameSubscriber')]"
+            }
+        },
+        {
+            /*PUBLISHER WEB APP*/
+            "name": "[parameters('PublisherWebAppName')]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2020-12-01",
+            "location": "[resourceGroup().location]",
+            "tags": "[parameters('lbResourceTagsPublisher')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms/',parameters('aspNamePublisher'))]"
+            ],
+            "properties": {
+                "name": "[parameters('PublisherWebAppName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms/', parameters('aspNamePublisher'))]",
+                "netFrameworkVersion": "[parameters('dotNetVersion')]",
+                "use32BitWorkerProcess": false,
+                "minTlsVersion": "1.2",
+                "ASPNETCORE_ENVIRONMENT": "Production",
+                "UMBRACO__CMS__SERVERROLE": "SchedulingPublisher",
+                "umbracoDbDSN": {
+                    "value": "[parameters('dbConnString')]",
+                    "type": "SQLAzure"
+                }
+            }
+        },
+        {
+            /*SUBSCRIBER WEB APP*/
+            "name": "[parameters('SubscriberWebAppName')]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2020-12-01",
+            "location": "[resourceGroup().location]",
+            "tags": "[parameters('lbResourceTagsSubscriber')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms/',parameters('aspNameSubscriber'))]"
+            ],
+            "properties": {
+                "name": "[parameters('SubscriberWebAppName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms/', parameters('aspNameSubscriber'))]",
+                "netFrameworkVersion": "[parameters('dotNetVersion')]",
+                "use32BitWorkerProcess": false,
+                "minTlsVersion": "1.2",
+                "alwaysOn": true,
+                "ASPNETCORE_ENVIRONMENT": "Production",
+                "umbracoDbDSN": {
+                    "value": "[parameters('dbConnString')]",
+                    "type": "SQLAzure"
+                }
+            }
+        },
+        {
+            /*SQL SERVER*/
+            "name": "[parameters('serverName')]",
+            "type": "Microsoft.Sql/servers",
+            "apiVersion": "2014-04-01",
+            "location": "[resourceGroup().location]",
+            "tags": "[parameters('generalResourceTags')]",
+            "properties": {
+                "administratorLogin": "[parameters('serverUser')]",
+                "administratorLoginPassword": "[parameters('serverPass')]"
+            },
+            "resources": [
+                {
+                    /*ALLOWS AZURE SERVICES TO CONNECT TO THE SERVER*/
+                    "type": "firewallRules",
+                    "apiVersion": "2014-04-01",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+                    ],
+                    "location": "[resourceGroup().location]",
+                    "name": "AllowAllWindowsAzureIps",
+                    "properties": {
+                        "startIpAddress": "0.0.0.0",
+                        "endIpAddress": "0.0.0.0"
+                    }
+                },
+                {
+                    /*WHITELISTS THE ADMINVPN*/
+                    "type": "firewallRules",
+                    "apiVersion": "2014-04-01",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+                    ],
+                    "location": "[resourceGroup().location]",
+                    "name": "MyIpRange",
+                    "properties": {
+                        "startIpAddress": "123.456.78.108",
+                        "endIpAddress": "123.456.78.108"
+                    }
+                }
+            ]
+        },
+        {
+            /*SQL DATABASE*/
+            "name": "[concat(parameters('serverName'), '/', parameters('dbName'))]",
+            "type": "Microsoft.Sql/servers/databases",
+            "apiVersion": "2014-04-01",
+            "location": "[resourceGroup().location]",
+            "tags": "[parameters('generalResourceTags')]",
+
+            "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+            ],
+            "properties": {
+                "collation": "SQL_Latin1_General_CP1_CI_AS",
+                "edition": "Basic",
+                "maxSizeBytes": "1073741824",
+                "requestedServiceObjectiveName": "Basic"
+            }
+        }
+    ],
+    "outputs": {}
+}
